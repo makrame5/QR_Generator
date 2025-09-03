@@ -1,0 +1,161 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko" lang="ko">
+  <head>
+    <title>Cross-Browser QRCode generator for Javascript</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+    <script type="text/javascript" src="jquery.min.js"></script>
+    <script type="text/javascript" src="qrcode.js"></script>
+    <style type="text/css">
+    	body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; margin: 24px; }
+    	.container { max-width: 720px; margin: 0 auto; }
+    	.card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    	.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    	.input { flex: 1; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; }
+    	.label { font-size: 12px; color: #6b7280; }
+    	.select, .number { padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; }
+    	.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    	.button { padding: 10px 14px; background: #111827; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    	.button.secondary { background: #374151; }
+    	.button:disabled { opacity: 0.6; cursor: not-allowed; }
+    	.preview { display: grid; place-items: center; background: #f9fafb; border: 1px dashed #e5e7eb; border-radius: 12px; padding: 16px; margin-top: 12px; }
+    	.helper { font-size: 12px; color: #6b7280; margin-top: 6px; }
+    </style>
+  </head>
+  <body>
+  <div class="container">
+    <div class="card">
+      <div class="row" style="margin-bottom:8px;">
+        <input id="text" type="text" value="http://jindo.dev.naver.com/collie" class="input" placeholder="Entrez le texte ou l’URL à encoder" />
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <div>
+          <div class="label">Taille (px)</div>
+          <input id="size" class="number" type="number" min="100" max="2048" step="10" value="300" />
+        </div>
+        <div class="actions" style="margin-left:auto;">
+          <button id="btn-generate" class="button">Générer</button>
+          <button id="btn-png" class="button secondary">Télécharger PNG</button>
+          <button id="btn-pdf" class="button secondary">Télécharger PDF</button>
+          <button id="btn-svg" class="button secondary">Télécharger SVG</button>
+        </div>
+      </div>
+      <div class="preview" style="width:300px; height:300px; margin:0 auto;">
+        <svg id="svgRoot" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="300" height="300">
+          <g id="qrcode"/>
+        </svg>
+      </div>
+      <div class="helper">Appuyez sur Entrée pour régénérer. Exports: PNG/PDF/SVG.</div>
+    </div>
+  </div>
+  <script type="text/javascript">
+  var qrcode = new QRCode(document.getElementById("qrcode"), {
+      width : 300,
+      height : 300,
+      useSVG: true
+  });
+
+  function makeCode () {		
+      var elText = document.getElementById("text");
+      var elSize = document.getElementById("size");
+
+      if (!elText.value) {
+          alert("Veuillez entrer un texte");
+          elText.focus();
+          return;
+      }
+
+      var size = Math.max(100, Math.min(2048, parseInt(elSize.value || '300', 10)));
+      var svgRoot = document.getElementById('svgRoot');
+      svgRoot.setAttribute('width', size);
+      svgRoot.setAttribute('height', size);
+      var preview = svgRoot.parentNode;
+      preview.style.width = size + 'px';
+      preview.style.height = size + 'px';
+
+      // Régénère dans <g id="qrcode">
+      qrcode = new QRCode(document.getElementById("qrcode"), {
+        width: size,
+        height: size,
+        useSVG: true
+      });
+      qrcode.makeCode(elText.value);
+  }
+
+  function svgToPngDataUrl() {
+    var svgRoot = document.getElementById('svgRoot');
+    var serializer = new XMLSerializer();
+    var svgString = serializer.serializeToString(svgRoot);
+    var svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+    return new Promise(function(resolve){
+      var img = new Image();
+      img.onload = function(){
+        var canvas = document.createElement('canvas');
+        canvas.width = svgRoot.width.baseVal.value;
+        canvas.height = svgRoot.height.baseVal.value;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.src = svgDataUrl;
+    });
+  }
+
+  function downloadURI(uri, filename) {
+    var a = document.createElement('a');
+    a.href = uri;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function downloadPNG() {
+    var png = await svgToPngDataUrl();
+    downloadURI(png, 'qrcode.png');
+  }
+
+  async function downloadPDF() {
+    var png = await svgToPngDataUrl();
+    if (typeof window.jspdf === 'undefined' && typeof window.jsPDF === 'undefined') {
+      alert('jsPDF non chargé. Vérifiez votre connexion internet.');
+      return;
+    }
+    var PDF = window.jspdf && window.jspdf.jsPDF ? window.jspdf.jsPDF : window.jsPDF;
+    var pdf = new PDF({ unit: 'pt', format: 'a4' });
+    var size = Math.max(100, Math.min(2048, parseInt(document.getElementById('size').value || '300', 10)));
+    var pageWidth = pdf.internal.pageSize.getWidth();
+    var pageHeight = pdf.internal.pageSize.getHeight();
+    var x = (pageWidth - size) / 2;
+    var y = (pageHeight - size) / 2;
+    pdf.addImage(png, 'PNG', x, y, size, size);
+    pdf.save('qrcode.pdf');
+  }
+
+  function downloadSVG() {
+    var svgRoot = document.getElementById('svgRoot');
+    var serializer = new XMLSerializer();
+    var svgString = serializer.serializeToString(svgRoot);
+    var blob = new Blob([svgString], {type: 'image/svg+xml'});
+    var url = URL.createObjectURL(blob);
+    downloadURI(url, 'qrcode.svg');
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function wireEvents() {
+    $("#text").
+        on("blur", function () { makeCode(); }).
+        on("keydown", function (e) { if (e.keyCode == 13) { makeCode(); } });
+    document.getElementById('btn-generate').addEventListener('click', makeCode);
+    document.getElementById('size').addEventListener('change', makeCode);
+    document.getElementById('btn-png').addEventListener('click', function(){ downloadPNG(); });
+    document.getElementById('btn-pdf').addEventListener('click', function(){ downloadPDF(); });
+    document.getElementById('btn-svg').addEventListener('click', function(){ downloadSVG(); });
+  }
+
+  makeCode();
+  wireEvents();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  </body>
+</html>
