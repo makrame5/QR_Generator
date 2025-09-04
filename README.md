@@ -24,7 +24,7 @@ Open `index.html` or `index-svg.html` in your browser to test the enhanced inter
 
 ### Direct Download
 ```bash
-git clone https://github.com/davidshimjs/qrcodejs.git
+https://github.com/makrame5/QR_Generator.git
 cd qrcodejs
 ```
 
